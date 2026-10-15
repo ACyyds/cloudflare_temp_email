@@ -8,7 +8,7 @@ import i18n from '../i18n';
 import { CONSTANTS } from '../constants'
 import { getJsonSetting, getDomains, getBooleanValue, getJsonObjectValue, getDomainMapValue, getMailDomain, includesDomain } from '../utils';
 import { GeoData } from '../models'
-import { handleListQuery, isSendMailBindingEnabled, updateAddressUpdatedAt } from '../common'
+import { handleListQuery, isSendMailBindingEnabled, updateAddressUpdatedAt, getSendAliasDomain } from '../common'
 import { getSendBalanceState, requestSendMailAccess } from './send_balance';
 import { ensureSendMailLimit, increaseSendMailLimitCount } from './send_mail_limit_utils';
 
@@ -82,14 +82,21 @@ const sendMailByResend = async (
     }
 ): Promise<void> => {
     const mailDomain = getMailDomain(address);
+    // resolve alias sending domain (e.g. a domain verified in Resend)
+    const aliasDomain = getSendAliasDomain(c, mailDomain);
+    const sendDomain = aliasDomain || mailDomain;
     const token = c.env[
-        `RESEND_TOKEN_${mailDomain.replace(/\./g, "_").toUpperCase()}`
+        `RESEND_TOKEN_${sendDomain.replace(/\./g, "_").toUpperCase()}`
     ] || c.env.RESEND_TOKEN;
+    const fromAddress = aliasDomain
+        ? `${address.slice(0, address.lastIndexOf("@"))}@${sendDomain}`
+        : address;
     const resend = new Resend(token);
     const { data, error } = await resend.emails.send({
-        from: reqJson.from_name ? `${reqJson.from_name} <${address}>` : address,
+        from: reqJson.from_name ? `${reqJson.from_name} <${fromAddress}>` : fromAddress,
         to: reqJson.to_name ? `${reqJson.to_name} <${reqJson.to_mail}>` : reqJson.to_mail,
         subject: reqJson.subject,
+        ...(aliasDomain ? { replyTo: address } : {}),
         ...(reqJson.is_html ? {
             html: reqJson.content,
         } : {
