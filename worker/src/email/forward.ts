@@ -56,29 +56,13 @@ async function forwardToGlobalAddresses(
     message: ForwardableEmailMessage,
     env: Bindings
 ): Promise<void> {
-    const forwardAddressList = getEnvStringList(env.FORWARD_ADDRESS_LIST);
-    const dbg: Record<string, unknown> = {
-        at: new Date().toISOString(),
-        from: message.from,
-        to: message.to,
-        canBeForwarded: (message as unknown as { canBeForwarded?: boolean }).canBeForwarded,
-        list: forwardAddressList,
-        results: [] as unknown[],
-    };
-    for (const forwardAddress of forwardAddressList) {
-        try {
-            const r = await message.forward(forwardAddress);
-            (dbg.results as unknown[]).push({ addr: forwardAddress, ok: true, result: String(r) });
-        } catch (error) {
-            (dbg.results as unknown[]).push({ addr: forwardAddress, ok: false, err: String(error) });
-            console.error("forward email error", error);
-        }
-    }
     try {
-        const kv = (env as unknown as { KV?: { put: (k: string, v: string) => Promise<void> } }).KV;
-        if (kv) await kv.put("forward_dbg:" + Date.now(), JSON.stringify(dbg));
-    } catch (e) {
-        console.error("kv debug write failed", e);
+        const forwardAddressList = getEnvStringList(env.FORWARD_ADDRESS_LIST);
+        for (const forwardAddress of forwardAddressList) {
+            await message.forward(forwardAddress);
+        }
+    } catch (error) {
+        console.error("forward email error", error);
     }
 }
 
