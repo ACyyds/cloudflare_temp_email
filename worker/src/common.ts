@@ -31,22 +31,39 @@ const areValidDomainLabels = (labels: string[]): boolean => {
 /**
  * Check if send mail is enabled for a specific domain
  */
+/**
+ * Resolve the actual sending domain for a mail domain.
+ * SEND_ALIAS_DOMAINS maps a receiving domain to another domain that is
+ * verified at the mail provider (e.g. Resend). Outgoing mail is then sent
+ * from the alias domain and Reply-To points back to the original address.
+ */
+export const getSendAliasDomain = (
+    c: Context<HonoCustomType>,
+    mailDomain: string
+): string => {
+    const aliasMap = getJsonObjectValue<Record<string, string>>(c.env.SEND_ALIAS_DOMAINS);
+    const alias = getDomainMapValue<string>(aliasMap, mailDomain);
+    return alias ? normalizeDomainValue(alias) : "";
+}
+
 export const isSendMailEnabled = (
     c: Context<HonoCustomType>,
     mailDomain: string
 ): boolean => {
+    // resolve alias sending domain (e.g. a domain verified in Resend)
+    const effectiveDomain = getSendAliasDomain(c, mailDomain) || mailDomain;
     // Check resend token for domain or global
     const resendEnabled = c.env.RESEND_TOKEN || c.env[
-        `RESEND_TOKEN_${mailDomain.replace(/\./g, "_").toUpperCase()}`
+        `RESEND_TOKEN_${effectiveDomain.replace(/\./g, "_").toUpperCase()}`
     ];
     if (resendEnabled) return true;
 
     // Check SMTP config for domain
     const smtpConfigMap = getJsonObjectValue<Record<string, WorkerMailerOptions>>(c.env.SMTP_CONFIG);
-    if (getDomainMapValue(smtpConfigMap, mailDomain)) return true;
+    if (getDomainMapValue(smtpConfigMap, effectiveDomain)) return true;
 
     // Check SEND_MAIL binding
-    if (isSendMailBindingEnabled(c, mailDomain)) return true;
+    if (isSendMailBindingEnabled(c, effectiveDomain)) return true;
 
     return false;
 }
