@@ -183,13 +183,16 @@ export const sendMail = async (
     }
     await ensureSendMailLimit(c);
 
+    // resolve alias sending domain (e.g. a domain verified in Resend)
+    const aliasDomain = getSendAliasDomain(c, mailDomain);
+    const sendDomain = aliasDomain || mailDomain;
     // send to verified address list, do not update balance
     const resendEnabled = c.env.RESEND_TOKEN || c.env[
-        `RESEND_TOKEN_${mailDomain.replace(/\./g, "_").toUpperCase()}`
+        `RESEND_TOKEN_${sendDomain.replace(/\./g, "_").toUpperCase()}`
     ];
     // send by smtp
     const smtpConfigMap = getJsonObjectValue<Record<string, WorkerMailerOptions>>(c.env.SMTP_CONFIG);
-    const smtpConfig = getDomainMapValue(smtpConfigMap, mailDomain);
+    const smtpConfig = getDomainMapValue(smtpConfigMap, sendDomain);
     // send by verified address list
     let sendByVerifiedAddressList = false;
     if (c.env.SEND_MAIL) {
