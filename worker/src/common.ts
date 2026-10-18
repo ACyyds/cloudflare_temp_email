@@ -487,6 +487,25 @@ export const newAddress = async (
                 if (enableRandomSubdomain && attempt < maxAttempts - 1) {
                     continue;
                 }
+                // Wildcard inbox: opening an address that already exists returns
+                // its JWT instead of failing, so any prefix@domain can be opened
+                // without creating it beforehand. Addresses protected by a
+                // password are never auto-opened.
+                const existing = await c.env.DB.prepare(
+                    `SELECT id, name, password FROM address WHERE name = ?`
+                ).bind(address).first() as { id: number; name: string; password: string | null } | null;
+                if (existing && !existing.password) {
+                    const existingJwt = await Jwt.sign({
+                        address: existing.name,
+                        address_id: existing.id
+                    }, c.env.JWT_SECRET, "HS256");
+                    return {
+                        jwt: existingJwt,
+                        address: existing.name,
+                        password: "",
+                        address_id: existing.id,
+                    };
+                }
                 throw new Error(msgs.AddressAlreadyExistsMsg)
             }
             throw new Error(msgs.FailedCreateAddressMsg)
